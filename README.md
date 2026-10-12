@@ -1,8 +1,8 @@
-# ComfyUI-AH_SeparateMasks
+# ComfyUI-AHP_SeparateMasks
 
 A ComfyUI custom node that splits a mask into one mask per connected object, with smooth edges preserved.
 
-Node name in ComfyUI: **AH Separate Masks** (category `AH/masking`)
+Node name in ComfyUI: **AHP Separate Masks** (category `AHP/masking`)
 
 ## Modes
 
@@ -34,8 +34,8 @@ Clone into your `ComfyUI/custom_nodes` folder and install the requirements:
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/YOUR_USERNAME/ComfyUI-AH_SeparateMasks.git
-pip install -r ComfyUI-AH_SeparateMasks/requirements.txt
+git clone https://github.com/YOUR_USERNAME/ComfyUI-AHP_SeparateMasks.git
+pip install -r ComfyUI-AHP_SeparateMasks/requirements.txt
 ```
 
 Restart ComfyUI.
@@ -43,7 +43,7 @@ Restart ComfyUI.
 ## Running the tests
 
 ```bash
-cd ComfyUI-AH_SeparateMasks
+cd ComfyUI-AHP_SeparateMasks
 python tests/test_ah_separate_masks.py
 ```
 

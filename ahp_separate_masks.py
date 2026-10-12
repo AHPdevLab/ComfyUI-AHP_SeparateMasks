@@ -1,3 +1,5 @@
+from inspect import cleandoc
+
 import cv2
 import numpy as np
 import scipy.ndimage
@@ -7,56 +9,153 @@ from comfy.utils import ProgressBar
 
 class AHP_SeparateMasks:
     """
-    Splits a mask into one mask per connected component.
+    Separates a mask into one mask per connected object, keeping soft (anti-aliased) edges.
 
-    - "area":            keeps each component's original soft (anti-aliased) values
-    - "convex_polygons": anti-aliased convex hull with a limited number of points
-    - "box":             filled bounding box (hard edges unless `feather` is set)
+    Modes
+    -----
+    area:
+        Each object keeps its original mask values, including anti-aliased edges.
+    convex_polygons:
+        Anti-aliased convex hull with about `max_poly_points` vertices.
+    box:
+        Filled bounding box. Edges are hard unless `feather` is above 0.
+
+    Class methods
+    -------------
+    INPUT_TYPES (dict):
+        Tell the main program input parameters of nodes.
+    IS_CHANGED:
+        optional method to control when the node is re executed.
+
+    Attributes
+    ----------
+    RETURN_TYPES (`tuple`):
+        The type of each element in the output tuple.
+    RETURN_NAMES (`tuple`):
+        Optional: The name of each output in the output tuple.
+    FUNCTION (`str`):
+        The name of the entry-point method. Here it is "separate", so the node runs AHP_SeparateMasks().separate()
+    OUTPUT_NODE ([`bool`]):
+        If this node is an output node that outputs a result/image from the graph.
+        Assumed to be False if not present.
+    CATEGORY (`str`):
+        The category the node should appear in the UI.
+    separate(...) -> tuple:
+        The entry point method. Its name must be the same as the value of property `FUNCTION`.
     """
 
+    def __init__(self):
+        pass
+
     @classmethod
-    def INPUT_TYPES(cls):
+    def INPUT_TYPES(s):
+        """
+        Return a dictionary which contains config for all input fields.
+
+        Returns: `dict`:
+            - Key input_fields_group (`string`): Can be either required, hidden or optional.
+            - Value input_fields (`dict`): Contains input fields config.
+        """
         return {
             "required": {
-                "mask": ("MASK",),
+                "mask": (
+                    "MASK",
+                    {"tooltip": "The mask to split into one mask per object."},
+                ),
                 "size_threshold_width": (
                     "INT",
-                    {"default": 256, "min": 0, "max": 4096, "step": 1},
+                    {
+                        "default": 256,
+                        "min": 0,
+                        "max": 4096,
+                        "step": 1,
+                        "tooltip": "Ignore objects narrower than this many pixels.",
+                    },
                 ),
                 "size_threshold_height": (
                     "INT",
-                    {"default": 256, "min": 0, "max": 4096, "step": 1},
+                    {
+                        "default": 256,
+                        "min": 0,
+                        "max": 4096,
+                        "step": 1,
+                        "tooltip": "Ignore objects shorter than this many pixels.",
+                    },
                 ),
-                "mode": (["convex_polygons", "area", "box"],),
+                "mode": (
+                    ["convex_polygons", "area", "box"],
+                    {
+                        "tooltip": "area keeps the original edges. convex_polygons gives a simplified outline. box gives a bounding box.",
+                    },
+                ),
                 "max_poly_points": (
                     "INT",
-                    {"default": 8, "min": 3, "max": 32, "step": 1},
+                    {
+                        "default": 8,
+                        "min": 3,
+                        "max": 32,
+                        "step": 1,
+                        "tooltip": "Target number of vertices in convex_polygons mode.",
+                    },
                 ),
             },
             "optional": {
-                # Pixels at or above this value are used to find components.
                 "detect_threshold": (
                     "FLOAT",
-                    {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01},
+                    {
+                        "default": 0.5,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "round": 0.001,
+                        "display": "number",
+                        "tooltip": "Pixels at or above this value are used to find objects. Lower it to catch faint objects.",
+                    },
                 ),
-                # Faint pixels within this many pixels of a component are kept with it (area mode).
-                "edge_reach": ("INT", {"default": 2, "min": 0, "max": 16, "step": 1}),
-                # Gaussian blur sigma applied to the output. 0 = off.
+                "edge_reach": (
+                    "INT",
+                    {
+                        "default": 2,
+                        "min": 0,
+                        "max": 16,
+                        "step": 1,
+                        "tooltip": "In area mode, faint pixels within this distance of an object stay with that object.",
+                    },
+                ),
                 "feather": (
                     "FLOAT",
-                    {"default": 0.0, "min": 0.0, "max": 16.0, "step": 0.5},
+                    {
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 16.0,
+                        "step": 0.5,
+                        "round": 0.001,
+                        "display": "number",
+                        "tooltip": "Blur radius applied to each output. 0 turns it off.",
+                    },
                 ),
-                # Anti-aliasing quality for polygon mode (1 = off).
-                "supersample": ("INT", {"default": 4, "min": 1, "max": 8, "step": 1}),
+                "supersample": (
+                    "INT",
+                    {
+                        "default": 4,
+                        "min": 1,
+                        "max": 8,
+                        "step": 1,
+                        "tooltip": "Anti-aliasing quality for convex_polygons mode. 1 turns it off.",
+                    },
+                ),
             },
         }
 
     RETURN_TYPES = ("MASK",)
     RETURN_NAMES = ("mask",)
+    DESCRIPTION = cleandoc(__doc__)
     FUNCTION = "separate"
+
+    # OUTPUT_NODE = False
+    # OUTPUT_TOOLTIPS = ("",)  # Tooltips for the output node
+
     CATEGORY = "AHP_Tools/masking"
-    OUTPUT_NODE = True
-    DESCRIPTION = "Separates a mask into multiple masks based on the size of the connected components."
 
     def polygon_to_mask(self, polygon, shape, supersample=4):
         """Anti-aliased rasterization: draw at higher resolution, then downsample with area averaging."""
@@ -124,9 +223,9 @@ class AHP_SeparateMasks:
             if ncomponents == 0:
                 continue
 
-            # Give each faint pixel the label of its nearest component, but only if it is
-            # within `edge_reach` pixels. This keeps anti-aliased edges with their object
-            # without pulling distant haze into it.
+            # Give each faint pixel the label of its nearest object, but only if it is within
+            # `edge_reach` pixels. This keeps anti-aliased edges with their object without
+            # pulling distant haze into it.
             if (labeled == 0).any():
                 dist, (iy, ix) = scipy.ndimage.distance_transform_edt(
                     labeled == 0, return_indices=True
@@ -180,3 +279,24 @@ class AHP_SeparateMasks:
             return (out_masks,)
 
         return (torch.zeros((1, H, W), dtype=torch.float32, device=mask.device),)
+
+    """
+        The node will always be re executed if any of the inputs change. Uncomment this to
+        force it to run again even when the inputs don't change. Return a value that differs
+        between runs to trigger re-execution.
+    """
+    # @classmethod
+    # def IS_CHANGED(s, mask, size_threshold_width, size_threshold_height, mode, max_poly_points, **kwargs):
+    #     return ""
+
+
+# A dictionary that contains all nodes you want to export with their names
+# NOTE: names should be globally unique
+NODE_CLASS_MAPPINGS = {
+    "AHP_SeparateMasks": AHP_SeparateMasks,
+}
+
+# A dictionary that contains the friendly/humanly readable titles for the nodes
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "AHP_SeparateMasks": "AHP Separate Masks",
+}
