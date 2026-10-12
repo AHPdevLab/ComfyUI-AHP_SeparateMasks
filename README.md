@@ -1,6 +1,6 @@
 # ComfyUI-AHP_SeparateMasks
 
-A ComfyUI custom node that splits a mask into one mask per connected object, with smooth edges preserved.
+A ComfyUI custom node that splits a mask into one mask per object, keeping the original soft (anti-aliased) edges.
 
 Node name in ComfyUI: **AHP Separate Masks** (category `AHP/masking`)
 
@@ -8,7 +8,7 @@ Node name in ComfyUI: **AHP Separate Masks** (category `AHP/masking`)
 
 | Mode | Output |
 |------|--------|
-| `area` | Each object's original mask values, including anti-aliased edges |
+| `area` | Each object's original mask values, including anti-aliased edges. Together the outputs reproduce the input mask |
 | `convex_polygons` | Anti-aliased convex hull with about `max_poly_points` vertices |
 | `box` | Filled bounding box (hard edges unless `feather` is above 0) |
 
@@ -21,12 +21,17 @@ Node name in ComfyUI: **AHP Separate Masks** (category `AHP/masking`)
 | `size_threshold_height` | 256 | Ignore objects shorter than this (pixels) |
 | `mode` | convex_polygons | `convex_polygons`, `area`, or `box` |
 | `max_poly_points` | 8 | Vertex target for polygon mode |
-| `detect_threshold` | 0.5 | Values at or above this find objects. Lower it to catch faint objects |
-| `edge_reach` | 2 | Faint pixels within this distance of an object are kept with it (area mode) |
-| `feather` | 0.0 | Gaussian blur sigma for the output. 0 = off |
+| `detect_threshold` | 0.5 | Decides how pixels are grouped into objects. Does not change the output edges |
+| `bridge_gap` | 0 | Joins pieces of one object separated by gaps up to about this many pixels. 0 = off |
+| `feather` | 0.0 | Blur radius for each output. 0 = off |
 | `supersample` | 4 | Anti-aliasing quality for polygon mode |
 
 Outputs are sorted left to right by the center of each object. Output is a float MASK with values from 0 to 1.
+
+## Tips
+
+- If one object splits into many pieces, raise `bridge_gap` to 1 or 2.
+- `detect_threshold` only affects how objects are found. Use the default unless you need to separate faint objects.
 
 ## Installation
 
