@@ -1,6 +1,6 @@
 # ComfyUI-AHP_SeparateMasks
 
-A ComfyUI custom node that splits a mask into one mask per object, keeping the original soft (anti-aliased) edges.
+A ComfyUI custom node that splits a mask into one clean mask per object. The output is a hard 0/1 mask by default, and you can soften or refine the edge with the options below.
 
 Node name in ComfyUI: **AHP Separate Masks** (category `AHP/masking`)
 
@@ -8,30 +8,52 @@ Node name in ComfyUI: **AHP Separate Masks** (category `AHP/masking`)
 
 | Mode | Output |
 |------|--------|
-| `area` | Each object's original mask values, including anti-aliased edges. Together the outputs reproduce the input mask |
-| `convex_polygons` | Anti-aliased convex hull with about `max_poly_points` vertices |
-| `box` | Filled bounding box (hard edges unless `feather` is above 0) |
+| `area` | Each object's own shape |
+| `convex_polygons` | Convex hull with about `max_poly_points` vertices |
+| `box` | Filled bounding box |
 
 ## Inputs
+
+### Required
 
 | Name | Default | Description |
 |------|---------|-------------|
 | `mask` | — | Input MASK |
+| `invert_mask` | off | Flips the input (1 − mask) before processing |
 | `size_threshold_width` | 256 | Ignore objects narrower than this (pixels) |
 | `size_threshold_height` | 256 | Ignore objects shorter than this (pixels) |
-| `mode` | convex_polygons | `convex_polygons`, `area`, or `box` |
-| `max_poly_points` | 8 | Vertex target for polygon mode |
-| `detect_threshold` | 0.5 | Decides how pixels are grouped into objects. Does not change the output edges |
-| `bridge_gap` | 0 | Joins pieces of one object separated by gaps up to about this many pixels. 0 = off |
-| `feather` | 0.0 | Blur radius for each output. 0 = off |
-| `supersample` | 4 | Anti-aliasing quality for polygon mode |
+| `mode` | area | `area`, `convex_polygons`, or `box` |
+| `max_poly_points` | 8 | Vertex target for convex_polygons mode |
 
-Outputs are sorted left to right by the center of each object. Output is a float MASK with values from 0 to 1.
+### Optional
+
+| Name | Default | Description |
+|------|---------|-------------|
+| `detect_threshold` | 0.5 | Decides which pixels are grouped into one object. Does not change the edge |
+| `bridge_gap` | 0 | Joins pieces of one object separated by gaps up to this many pixels. 0 = off |
+| `edge_shift` | 0 | Grows (+) or shrinks (−) each object by this many pixels |
+| `smooth` | 0 | Rounds jagged edges. Output stays binary. 0 = off |
+| `feather` | 0.0 | Blur radius that softens the edge. 0 = hard edge |
+| `contrast` | 0.0 | Sharpens the feathered edge. Has no effect when `feather` is 0 |
+| `supersample` | 4 | Edge smoothness for convex_polygons mode |
+
+## Processing order
+
+1. `invert_mask`
+2. `detect_threshold` and `bridge_gap` decide which pixels form each object
+3. Each object is cut out as a hard 0/1 shape
+4. `edge_shift`
+5. `smooth`
+6. `feather`
+7. `contrast`
+
+Outputs are sorted left to right by the center of each object.
 
 ## Tips
 
+- For a clean cut-out, leave everything except `invert_mask` at its default.
 - If one object splits into many pieces, raise `bridge_gap` to 1 or 2.
-- `detect_threshold` only affects how objects are found. Use the default unless you need to separate faint objects.
+- For a soft edge like Photoshop's Feather, set `feather` to 2–6 and `contrast` to 0.3–0.6.
 
 ## Installation
 
@@ -49,7 +71,7 @@ Restart ComfyUI.
 
 ```bash
 cd ComfyUI-AHP_SeparateMasks
-python tests/test_ah_separate_masks.py
+python tests/test_ahp_separate_masks.py
 ```
 
 ## Credits
