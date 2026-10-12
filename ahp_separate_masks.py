@@ -1,3 +1,26 @@
+# AHP Separate Masks
+# Copyright (C) 2026 Ali Haghighat Panah
+#
+# This file is a modified version of SeparateMasks from ComfyUI-KJNodes
+# (https://github.com/kijai/ComfyUI-KJNodes, nodes/mask_nodes.py), copyright kijai,
+# licensed under GPL-3.0. All changes and new features were made by Ali Haghighat Panah.
+# Development was assisted by Claude (Anthropic).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# Modified from the original: see README.md for the list of changes.
+
 from inspect import cleandoc
 
 import cv2
@@ -63,100 +86,139 @@ class AHP_SeparateMasks:
     @classmethod
     def INPUT_TYPES(s):
         """
-            Return a dictionary which contains config for all input fields.
+        Return a dictionary which contains config for all input fields.
 
-            Returns: `dict`:
-                - Key input_fields_group (`string`): Can be either required, hidden or optional.
-                - Value input_fields (`dict`): Contains input fields config.
+        Returns: `dict`:
+            - Key input_fields_group (`string`): Can be either required, hidden or optional.
+            - Value input_fields (`dict`): Contains input fields config.
         """
         return {
             "required": {
-                "mask": ("MASK", {"tooltip": "The mask to split into one mask per object."}),
-                "invert_mask": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Invert the input mask (1 - mask) before processing.",
-                }),
-                "size_threshold_width": ("INT", {
-                    "default": 256,
-                    "min": 0,
-                    "max": 4096,
-                    "step": 1,
-                    "tooltip": "Ignore objects narrower than this many pixels.",
-                }),
-                "size_threshold_height": ("INT", {
-                    "default": 256,
-                    "min": 0,
-                    "max": 4096,
-                    "step": 1,
-                    "tooltip": "Ignore objects shorter than this many pixels.",
-                }),
-                "mode": (["area", "convex_polygons", "box"], {
-                    "tooltip": "area keeps the object's own shape. convex_polygons gives a simplified outline. box gives a bounding box.",
-                }),
-                "max_poly_points": ("INT", {
-                    "default": 8,
-                    "min": 3,
-                    "max": 32,
-                    "step": 1,
-                    "tooltip": "Target number of vertices in convex_polygons mode.",
-                }),
+                "mask": (
+                    "MASK",
+                    {"tooltip": "The mask to split into one mask per object."},
+                ),
+                "invert_mask": (
+                    "BOOLEAN",
+                    {
+                        "default": False,
+                        "tooltip": "Invert the input mask (1 - mask) before processing.",
+                    },
+                ),
+                "size_threshold_width": (
+                    "INT",
+                    {
+                        "default": 256,
+                        "min": 0,
+                        "max": 4096,
+                        "step": 1,
+                        "tooltip": "Ignore objects narrower than this many pixels.",
+                    },
+                ),
+                "size_threshold_height": (
+                    "INT",
+                    {
+                        "default": 256,
+                        "min": 0,
+                        "max": 4096,
+                        "step": 1,
+                        "tooltip": "Ignore objects shorter than this many pixels.",
+                    },
+                ),
+                "mode": (
+                    ["area", "convex_polygons", "box"],
+                    {
+                        "tooltip": "area keeps the object's own shape. convex_polygons gives a simplified outline. box gives a bounding box.",
+                    },
+                ),
+                "max_poly_points": (
+                    "INT",
+                    {
+                        "default": 8,
+                        "min": 3,
+                        "max": 32,
+                        "step": 1,
+                        "tooltip": "Target number of vertices in convex_polygons mode.",
+                    },
+                ),
             },
             "optional": {
-                "detect_threshold": ("FLOAT", {
-                    "default": 0.5,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.01,
-                    "round": 0.001,
-                    "display": "number",
-                    "tooltip": "Decides which pixels are grouped into objects. Does not change the edge of the output.",
-                }),
-                "bridge_gap": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "max": 8,
-                    "step": 1,
-                    "tooltip": "Joins pieces of one object separated by gaps up to about this many pixels. Use it if one object splits into many parts. 0 = off.",
-                }),
-                "edge_shift": ("INT", {
-                    "default": 0,
-                    "min": -16,
-                    "max": 16,
-                    "step": 1,
-                    "tooltip": "Grows (positive) or shrinks (negative) each object by this many pixels.",
-                }),
-                "smooth": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "max": 16,
-                    "step": 1,
-                    "tooltip": "Rounds jagged edges. Output stays binary. 0 = off.",
-                }),
-                "feather": ("FLOAT", {
-                    "default": 0.0,
-                    "min": 0.0,
-                    "max": 16.0,
-                    "step": 0.5,
-                    "round": 0.001,
-                    "display": "number",
-                    "tooltip": "Blur radius that softens the edge. 0 = hard 0/1 edge.",
-                }),
-                "contrast": ("FLOAT", {
-                    "default": 0.0,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.01,
-                    "round": 0.001,
-                    "display": "slider",
-                    "tooltip": "Sharpens the feathered edge. 0 = off. Has no effect when feather is 0.",
-                }),
-                "supersample": ("INT", {
-                    "default": 4,
-                    "min": 1,
-                    "max": 8,
-                    "step": 1,
-                    "tooltip": "Edge smoothness for convex_polygons mode. Higher is smoother but slower.",
-                }),
+                "detect_threshold": (
+                    "FLOAT",
+                    {
+                        "default": 0.5,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "round": 0.001,
+                        "display": "number",
+                        "tooltip": "Decides which pixels are grouped into objects. Does not change the edge of the output.",
+                    },
+                ),
+                "bridge_gap": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 8,
+                        "step": 1,
+                        "tooltip": "Joins pieces of one object separated by gaps up to about this many pixels. Use it if one object splits into many parts. 0 = off.",
+                    },
+                ),
+                "edge_shift": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": -16,
+                        "max": 16,
+                        "step": 1,
+                        "tooltip": "Grows (positive) or shrinks (negative) each object by this many pixels.",
+                    },
+                ),
+                "smooth": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 16,
+                        "step": 1,
+                        "tooltip": "Rounds jagged edges. Output stays binary. 0 = off.",
+                    },
+                ),
+                "feather": (
+                    "FLOAT",
+                    {
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 16.0,
+                        "step": 0.5,
+                        "round": 0.001,
+                        "display": "number",
+                        "tooltip": "Blur radius that softens the edge. 0 = hard 0/1 edge.",
+                    },
+                ),
+                "contrast": (
+                    "FLOAT",
+                    {
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.01,
+                        "round": 0.001,
+                        "display": "slider",
+                        "tooltip": "Sharpens the feathered edge. 0 = off. Has no effect when feather is 0.",
+                    },
+                ),
+                "supersample": (
+                    "INT",
+                    {
+                        "default": 4,
+                        "min": 1,
+                        "max": 8,
+                        "step": 1,
+                        "tooltip": "Edge smoothness for convex_polygons mode. Higher is smoother but slower.",
+                    },
+                ),
             },
         }
 
@@ -181,7 +243,9 @@ class AHP_SeparateMasks:
         return (small >= 128).astype(np.float32)
 
     def get_mask_polygon(self, mask_np, max_points):
-        contours, _ = cv2.findContours(mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        contours, _ = cv2.findContours(
+            mask_np, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+        )
         if not contours:
             return None
         largest = max(contours, key=cv2.contourArea)
@@ -229,11 +293,22 @@ class AHP_SeparateMasks:
 
         return out.astype(np.float32)
 
-    def separate(self, mask: torch.Tensor, size_threshold_width: int, size_threshold_height: int,
-                 max_poly_points: int, mode: str, invert_mask: bool = False,
-                 detect_threshold: float = 0.5, bridge_gap: int = 0,
-                 edge_shift: int = 0, smooth: int = 0, feather: float = 0.0,
-                 contrast: float = 0.0, supersample: int = 4):
+    def separate(
+        self,
+        mask: torch.Tensor,
+        size_threshold_width: int,
+        size_threshold_height: int,
+        max_poly_points: int,
+        mode: str,
+        invert_mask: bool = False,
+        detect_threshold: float = 0.5,
+        bridge_gap: int = 0,
+        edge_shift: int = 0,
+        smooth: int = 0,
+        feather: float = 0.0,
+        contrast: float = 0.0,
+        supersample: int = 4,
+    ):
         B, H, W = mask.shape
         soft_all = mask.detach().float().clamp(0, 1).cpu().numpy()
         if invert_mask:
@@ -247,15 +322,21 @@ class AHP_SeparateMasks:
             # Step 1: decide which pixels form objects. The threshold is used only here.
             binary = soft >= detect_threshold
             if bridge_gap > 0:
-                binary = scipy.ndimage.binary_closing(binary, structure=structure, iterations=int(bridge_gap))
-            labeled, ncomponents = scipy.ndimage.label(binary.astype(np.uint8), structure=structure)
+                binary = scipy.ndimage.binary_closing(
+                    binary, structure=structure, iterations=int(bridge_gap)
+                )
+            labeled, ncomponents = scipy.ndimage.label(
+                binary.astype(np.uint8), structure=structure
+            )
             if ncomponents == 0:
                 continue
 
             # Step 2: each pixel with a mask value belongs to its nearest object,
             # so objects never overlap and their union covers the whole mask.
             if (labeled == 0).any():
-                _, (iy, ix) = scipy.ndimage.distance_transform_edt(labeled == 0, return_indices=True)
+                _, (iy, ix) = scipy.ndimage.distance_transform_edt(
+                    labeled == 0, return_indices=True
+                )
                 owner = labeled[iy, ix]
             else:
                 owner = labeled.copy()
@@ -283,7 +364,9 @@ class AHP_SeparateMasks:
                     continue
 
                 if mode == "convex_polygons":
-                    polygon = self.get_mask_polygon(obj.astype(np.uint8), max_poly_points)
+                    polygon = self.get_mask_polygon(
+                        obj.astype(np.uint8), max_poly_points
+                    )
                     if polygon is None or len(polygon) < 3:
                         pbar.update(1)
                         continue
@@ -292,14 +375,21 @@ class AHP_SeparateMasks:
                     oy = np.where(np.any(obj, axis=1))[0]
                     ox = np.where(np.any(obj, axis=0))[0]
                     shape = np.zeros((H, W), dtype=np.float32)
-                    shape[oy[0]:oy[-1] + 1, ox[0]:ox[-1] + 1] = 1.0
+                    shape[oy[0] : oy[-1] + 1, ox[0] : ox[-1] + 1] = 1.0
                 else:  # "area"
                     shape = obj
 
                 # Step 4-7: edge refinement.
                 out = self.refine(shape, edge_shift, smooth, feather, contrast)
                 if out.max() > 0:
-                    separated.append((centroid_x, torch.from_numpy(np.ascontiguousarray(out, dtype=np.float32))))
+                    separated.append(
+                        (
+                            centroid_x,
+                            torch.from_numpy(
+                                np.ascontiguousarray(out, dtype=np.float32)
+                            ),
+                        )
+                    )
                 pbar.update(1)
 
         if len(separated) > 0:
