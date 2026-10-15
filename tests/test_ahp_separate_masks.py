@@ -43,7 +43,7 @@ NODE = pkg.NODE_CLASS_MAPPINGS["AHP_SeparateMasks"]()
 
 def run(mask, w=1, h=1, mode="area", **kw):
     """Call the node with ComfyUI-style keyword arguments and return the output tensor."""
-    out, = NODE.separate(mask, size_threshold_width=w, size_threshold_height=h,
+    out, _ = NODE.separate(mask, size_threshold_width=w, size_threshold_height=h,
                          max_poly_points=8, mode=mode, **kw)
     return out
 
@@ -257,6 +257,99 @@ def test_batch_input_collects_objects_from_all_frames():
         blob_mask(rects=((10, 10, 50, 50), (70, 70, 110, 110)))[0],
     ])
     assert run(m).shape == (3, 128, 128)
+
+
+
+# ---------------------------------------------------------------- frame index and compatibility
+
+def test_registration_outputs_frame_index():
+    assert NODE.RETURN_TYPES == ("MASK", "AHP_FRAME_INDEX")
+    assert NODE.RETURN_NAMES == ("mask", "frame_index")
+    assert "keep_soft_edges" in NODE.INPUT_TYPES()["optional"]
+
+
+def test_frame_index_tracks_source_frame_per_object():
+    f0 = blob_mask(rects=((10, 10, 40, 40), (60, 10, 90, 40)))[0]
+    f1 = blob_mask(rects=((30, 70, 80, 110),))[0]
+    out, frames = NODE.separate(torch.stack([f0, f1]), 1, 1, 8, "area")
+    assert out.shape[0] == 3
+    assert frames == [0, 0, 1]
+
+
+def test_objects_ordered_by_frame_then_left_to_right():
+    f0 = blob_mask(rects=((60, 10, 90, 40), (10, 10, 40, 40)))[0]  # right blob listed first
+    f1 = blob_mask(rects=((50, 50, 80, 80),))[0]
+    out, frames = NODE.separate(torch.stack([f0, f1]), 1, 1, 8, "area")
+    cx = [np.where(out[i].numpy() > 0.5)[1].mean() for i in range(3)]
+    assert frames == [0, 0, 1]
+    assert cx[0] < cx[1]
+
+
+def test_frame_index_fallback_when_nothing_found():
+    out, frames = NODE.separate(torch.zeros(2, 32, 32), 1, 1, 8, "area")
+    assert out.shape == (1, 32, 32)
+    assert out.abs().sum().item() == 0.0
+    assert frames == [0]
+
+
+def test_keep_soft_edges_preserves_input_values():
+    m = blob_mask()
+    out, _ = NODE.separate(m, 1, 1, 8, "area", keep_soft_edges=True)
+    assert torch.allclose(out[0], m[0], atol=1e-6)
+
+
+def test_default_output_is_binary_when_keep_soft_edges_off():
+    out, _ = NODE.separate(blob_mask(), 1, 1, 8, "area")
+    assert is_binary(out[0].numpy())
+
+
+# ---------------------------------------------------------------- float edge controls
+
+def test_zero_shift_is_exact_identity():
+    shape = np.zeros((40, 40), np.float32)
+    shape[10:30, 12:25] = 1.0
+    shape[0:5, 0:5] = 1.0
+    cov = NODE.shift_coverage(shape >= 0.5, 0.0)
+    assert np.array_equal(cov, shape)
+
+
+def test_fractional_shift_gives_partial_edge_when_hard_edge_off():
+    m = blob_mask(rects=((20, 20, 60, 60),), aa=False)
+    out = run(m, edge_shift=0.4, hard_edge=False)[0].numpy()
+    assert fractional(out) > 0
+    assert out.max() <= 1.0 and out.min() >= 0.0
+
+
+def test_fractional_shift_is_monotonic():
+    m = blob_mask(rects=((20, 20, 60, 60),), aa=False)
+    sums = [run(m, edge_shift=s, hard_edge=False)[0].numpy().sum() for s in (-1.0, -0.5, 0.0, 0.5, 1.0)]
+    assert all(a < b for a, b in zip(sums, sums[1:]))
+
+
+def test_hard_edge_keeps_output_binary_for_fractional_shift():
+    m = blob_mask(rects=((20, 20, 60, 60),), aa=False)
+    out = run(m, edge_shift=0.7, hard_edge=True)[0].numpy()
+    assert is_binary(out)
+
+
+def test_grow_by_one_matches_one_pixel_dilation():
+    m = blob_mask(rects=((20, 20, 60, 60),), aa=False)
+    grown = run(m, edge_shift=1.0)[0].numpy()
+    assert grown.sum() > m[0].numpy().sum()
+    assert grown[19, 40] == 1.0 and grown[18, 40] == 0.0
+
+
+def test_float_smooth_is_accepted_and_binary():
+    m = blob_mask(rects=((20, 20, 60, 60),), aa=False)
+    out = run(m, smooth=1.5)[0].numpy()
+    assert is_binary(out)
+
+
+def test_soft_mode_shift_keeps_original_values_inside():
+    m = blob_mask()
+    base = run(m, keep_soft_edges=True)[0].numpy()
+    grown = run(m, keep_soft_edges=True, edge_shift=1.0)[0].numpy()
+    assert (grown >= base - 1e-6).all()
 
 
 if __name__ == "__main__":

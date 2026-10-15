@@ -4,8 +4,7 @@
 
 - Node name in ComfyUI: **AHP Separate Masks**
 - Category: `AHP/masking`
-- Author: **Ali Haghighat Panah**
-- Github: https://github.com/AHPdevLab/ComfyUI-AHP_SeparateMasks
+- Author: **Ali Haghighat panah**
 - License: GPL-3.0 (see [LICENSE](LICENSE))
 
 ---
@@ -31,6 +30,15 @@ The node processes each mask in these steps:
 | `convex_polygons` | The convex hull of the object, simplified to about `max_poly_points` vertices and anti-aliased with `supersample` |
 | `box` | A filled rectangle around the object |
 
+## Outputs
+
+| Output | Type | What it contains |
+|---|---|---|
+| `mask` | MASK | One mask per object. Batch of N objects |
+| `frame_index` | AHP_FRAME_INDEX | A list with the source frame of each object, for example `[0, 0, 1]`. Connect it to **AHP Batch Crop By Mask** to crop each object from its own frame |
+
+Objects are ordered by frame first, then left to right inside each frame. Frames with no objects are skipped. If nothing is found at all, the output is one blank mask with frame index `[0]`.
+
 ## Inputs
 
 ### Required
@@ -50,10 +58,12 @@ The node processes each mask in these steps:
 |---|---|---|
 | `detect_threshold` | 0.5 | Which pixels count as part of an object when grouping. Does not affect the edge |
 | `bridge_gap` | 0 | Joins pieces of one object separated by gaps up to this many pixels. 0 = off |
-| `edge_shift` | 0 | Grows (+) or shrinks (−) each object by this many pixels |
-| `smooth` | 0 | Rounds jagged edges. The output stays 0/1. 0 = off |
-| `feather` | 0.0 | Blurs the edge into a soft gradient. 0 = hard edge |
+| `edge_shift` | 0.0 | Grows (+) or shrinks (−) each object, in fractional pixels (for example 0.3 or −1.5) |
+| `smooth` | 0.0 | Blur radius (float) used to round jagged edges. 0 = off |
+| `feather` | 0.0 | Blurs the edge into a soft gradient. Float, step 0.1. 0 = hard edge |
+| `hard_edge` | on | On: output is 0/1. Fractional shifts then act on a half-pixel grid. Off: a fractional shift gives a 1px soft edge |
 | `contrast` | 0.0 | Sharpens a feathered edge. Has no effect when `feather` is 0 |
+| `keep_soft_edges` | off | `area` mode only. Keeps each object's original soft values instead of cutting it to 0/1. Use this to keep the input mask quality. `smooth` is skipped in this mode, since it works on 0/1 shapes |
 | `supersample` | 4 | Edge smoothness in `convex_polygons` mode. Higher is smoother and slower |
 
 ## Photoshop equivalents
@@ -80,7 +90,7 @@ The original node is the starting point. This version adds the following:
 | Invert input | Not available | `invert_mask` switch |
 | Grouping control | Fixed at 0.5 | `detect_threshold` |
 | Joining split objects | Not available | `bridge_gap` |
-| Edge refinement | Not available | `edge_shift`, `smooth`, `feather`, `contrast` (Photoshop-style) |
+| Edge refinement | Not available | `edge_shift`, `smooth`, `feather`, `contrast` (Photoshop-style). `edge_shift`, `smooth`, and `feather` are floats |
 | Polygon edges | Stair-stepped | Anti-aliased with `supersample` |
 | Output type | 8-bit values (`uint8`) | Float 32-bit values, as ComfyUI expects |
 | Empty result | Returns uninitialized memory | Returns zeros with the correct size |
@@ -118,7 +128,8 @@ Restart ComfyUI. Double-click the canvas and search for **AHP Separate Masks**.
 - For a clean cut-out, leave everything at its default except `invert_mask` (if needed).
 - If one object splits into many pieces, set `bridge_gap` to 1 or 2.
 - For a soft edge similar to Photoshop's Feather, try `feather` at 2–6 and `contrast` at 0.3–0.6.
-- To grow or shrink an object slightly, use `edge_shift` (for example, +2 or −2).
+- To grow or shrink an object slightly, use `edge_shift` (for example, +0.5 or −1.5).
+- To see exact sub-pixel shifts, turn `hard_edge` off. The boundary then shows partial values equal to the shift's fraction.
 
 ## Running the tests
 
@@ -131,10 +142,16 @@ The tests run without ComfyUI. They need `numpy`, `scipy`, `opencv-python`, and 
 
 ## Credits
 
-- **Author and modifications:** Ali Haghighat Panah
-- **Original code:** `class SeparateMasks` from [ComfyUI-KJNodes/Nodes/mask_nodes.py (Line 1309 to 1434)](https://github.com/kijai/ComfyUI-KJNodes/blob/d7641533d6634eb05f8570c980fce8fc8528dc7b/nodes/mask_nodes.py#L1309-L1434) by kijai, licensed under GPL-3.0
+- **Author and modifications:** Ali Haghighat panah
+- **Original code:** `SeparateMasks` from [ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes) by kijai, licensed under GPL-3.0
 - **Development assistance:** Claude (Anthropic), used to help write and test the code
 
 ## License
 
 This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. Because it's based on GPL-3.0 code, the modified version must also be GPL-3.0. The full text is in [LICENSE](LICENSE).
+
+## Connecting to AHP Batch Crop By Mask
+
+Connect `frame_index` from this node to the `object_frames` input of **AHP Batch Crop By Mask**, and connect `mask` to its `mask` input. Each object is then cropped from the image of the frame it came from. Use `box_mode: per_image` so each object gets its own crop.
+
+To keep the original mask quality through the chain, turn on `keep_soft_edges`.
